@@ -73,6 +73,7 @@ anaconda-iso:
     - rsyslog
     - selinux-policy-targeted
     - sg3_utils
+    - shim
     - sil-padauk-fonts
     - smartmontools
     - spice-vdagent
