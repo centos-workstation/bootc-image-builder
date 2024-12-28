@@ -17,6 +17,10 @@ COPY ./package-requires.txt .
 RUN grep -vE '^#' package-requires.txt | xargs dnf install -y && rm -f package-requires.txt && dnf clean all
 COPY --from=builder /build/bin/* /usr/bin/
 COPY bib/data /usr/share/bootc-image-builder
+RUN FILES=(/etc/yum.repos.d/fedora*.repo); sed --in-place \
+    -e 's ^metalink= #metalink= ' \
+    -e "s ^#baseurl=https://mirror.facebook.net/ baseurl=https://dl.fedoraproject.org/ " \
+    "${FILES[@]}";
 
 ENTRYPOINT ["/usr/bin/bootc-image-builder"]
 VOLUME /output
