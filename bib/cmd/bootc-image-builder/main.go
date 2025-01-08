@@ -561,35 +561,69 @@ func rootPreRunE(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-// TODO: provide more version info (like actual version number) once we
-// release a real version
-func cmdVersion(_ *cobra.Command, _ []string) error {
+func cmdVersion() (string, error) {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
-		return fmt.Errorf("cannot read build info")
+		return "", fmt.Errorf("cannot read build info")
 	}
 	var gitRev string
+	var buildTime string
+	var buildTainted bool
+	ret := []string{}
 	for _, bs := range info.Settings {
 		if bs.Key == "vcs.revision" {
 			gitRev = bs.Value
-			break
+			continue
+		}
+		if bs.Key == "vcs.time" {
+			buildTime = bs.Value
+			continue
+		}
+		if bs.Key == "vcs.modified" {
+			bT, err := strconv.ParseBool(bs.Value)
+			if err != nil {
+				logrus.Errorf("Error parsing 'vcs.modified': %v", err)
+				bT = true
+			}
+
+			buildTainted = bT
+			continue
 		}
 	}
 	if gitRev != "" {
-		fmt.Printf("revision: %s\n", gitRev[:7])
+		ret = append(ret, fmt.Sprintf("build_revision: %s", gitRev[:7]))
 	} else {
-		fmt.Printf("revision: unknown\n")
+		ret = append(ret, "build_revision: unknown")
 	}
-	return nil
+	if buildTime != "" {
+		ret = append(ret, fmt.Sprintf("build_time: %s", buildTime))
+	}
+	if buildTainted {
+		ret = append(ret, "build_status: tainted")
+	} else {
+		ret = append(ret, "build_status: ok")
+	}
+
+	// append final newline
+	ret = append(ret, "")
+
+	return strings.Join(ret, "\n"), nil
 }
 
 func buildCobraCmdline() (*cobra.Command, error) {
+	version, err := cmdVersion()
+	if err != nil {
+		return nil, err
+	}
+
 	rootCmd := &cobra.Command{
 		Use:               "bootc-image-builder",
 		Long:              "Create a bootable image from an ostree native container",
 		PersistentPreRunE: rootPreRunE,
 		SilenceErrors:     true,
+		Version:           version,
 	}
+	rootCmd.SetVersionTemplate(version)
 
 	rootCmd.PersistentFlags().StringVar(&rootLogLevel, "log-level", "", "logging level (debug, info, error); default error")
 
@@ -605,7 +639,10 @@ func buildCobraCmdline() (*cobra.Command, error) {
 		SilenceUsage:          true,
 		Example: rootCmd.Use + " build quay.io/centos-bootc/centos-bootc:stream9\n" +
 			rootCmd.Use + " quay.io/centos-bootc/centos-bootc:stream9\n",
+		Version:               rootCmd.Version,
 	}
+	buildCmd.SetVersionTemplate(version)
+
 	rootCmd.AddCommand(buildCmd)
 	manifestCmd := &cobra.Command{
 		Use:                   "manifest",
@@ -614,13 +651,21 @@ func buildCobraCmdline() (*cobra.Command, error) {
 		DisableFlagsInUseLine: true,
 		RunE:                  cmdManifest,
 		SilenceUsage:          true,
+		Version:               rootCmd.Version,
 	}
+	manifestCmd.SetVersionTemplate(version)
+
 	versionCmd := &cobra.Command{
 		Use:          "version",
+		Short:        "Show the version and quit",
 		SilenceUsage: true,
-		Hidden:       true,
-		RunE:         cmdVersion,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			root := cmd.Root()
+			root.SetArgs([]string{"--version"})
+			return root.Execute()
+		},
 	}
+
 	rootCmd.AddCommand(versionCmd)
 
 	rootCmd.AddCommand(manifestCmd)
@@ -687,6 +732,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+
 	return rootCmd.Execute()
 }
 

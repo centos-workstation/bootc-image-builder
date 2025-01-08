@@ -87,7 +87,9 @@ def gen_testcases(what):  # pylint: disable=too-many-return-statements
         return [TestCaseC9S(image="ami"), TestCaseFedora(image="ami")]
     if what == "anaconda-iso":
         return [
-            TestCaseFedora(image="anaconda-iso", sign=True),
+            # 2024-12-19: disabled for now until the mirror situation becomes
+            # a bit more stable
+            # TestCaseFedora(image="anaconda-iso", sign=True),
             TestCaseC9S(image="anaconda-iso"),
             TestCaseC10S(image="anaconda-iso"),
         ]
@@ -102,12 +104,8 @@ def gen_testcases(what):  # pylint: disable=too-many-return-statements
         ]
         # do a cross arch test too
         if platform.machine() == "x86_64":
-            # TODO: re-enable once
-            # https://github.com/osbuild/bootc-image-builder/issues/619
-            # is resolved
-            # test_cases.append(
-            #    TestCaseC9S(image="raw", target_arch="arm64"))
-            pass
+            test_cases.append(
+                TestCaseC9S(image="raw", target_arch="arm64"))
         elif platform.machine() == "arm64":
             # TODO: add arm64->x86_64 cross build test too
             pass
