@@ -546,72 +546,61 @@ func chownR(path string, chown string) error {
 var rootLogLevel string
 
 func rootPreRunE(cmd *cobra.Command, _ []string) error {
-	if rootLogLevel == "" {
+	verbose, _ := cmd.Flags().GetBool("verbose")
+	progress, _ := cmd.Flags().GetString("progress")
+	switch {
+	case rootLogLevel != "":
+		level, err := logrus.ParseLevel(rootLogLevel)
+		if err != nil {
+			return err
+		}
+		logrus.SetLevel(level)
+	case verbose:
+		logrus.SetLevel(logrus.InfoLevel)
+	default:
 		logrus.SetLevel(logrus.ErrorLevel)
-		return nil
 	}
-
-	level, err := logrus.ParseLevel(rootLogLevel)
-	if err != nil {
-		return err
+	if verbose && progress == "auto" {
+		if err := cmd.Flags().Set("progress", "verbose"); err != nil {
+			return err
+		}
 	}
-
-	logrus.SetLevel(level)
 
 	return nil
 }
 
-func cmdVersion() (string, error) {
+func versionFromBuildInfo() (string, error) {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
 		return "", fmt.Errorf("cannot read build info")
 	}
-	var gitRev string
-	var buildTime string
 	var buildTainted bool
-	ret := []string{}
+	gitRev := "unknown"
+	buildTime := "unknown"
 	for _, bs := range info.Settings {
-		if bs.Key == "vcs.revision" {
-			gitRev = bs.Value
-			continue
-		}
-		if bs.Key == "vcs.time" {
+		switch bs.Key {
+		case "vcs.revision":
+			gitRev = bs.Value[:7]
+		case "vcs.time":
 			buildTime = bs.Value
-			continue
-		}
-		if bs.Key == "vcs.modified" {
+		case "vcs.modified":
 			bT, err := strconv.ParseBool(bs.Value)
 			if err != nil {
 				logrus.Errorf("Error parsing 'vcs.modified': %v", err)
 				bT = true
 			}
-
 			buildTainted = bT
-			continue
 		}
 	}
-	if gitRev != "" {
-		ret = append(ret, fmt.Sprintf("build_revision: %s", gitRev[:7]))
-	} else {
-		ret = append(ret, "build_revision: unknown")
-	}
-	if buildTime != "" {
-		ret = append(ret, fmt.Sprintf("build_time: %s", buildTime))
-	}
-	if buildTainted {
-		ret = append(ret, "build_status: tainted")
-	} else {
-		ret = append(ret, "build_status: ok")
-	}
 
-	// append final newline
-	ret = append(ret, "")
-
-	return strings.Join(ret, "\n"), nil
+	return fmt.Sprintf(`build_revision: %s
+build_time: %s
+build_tainted: %v
+`, gitRev, buildTime, buildTainted), nil
 }
 
 func buildCobraCmdline() (*cobra.Command, error) {
-	version, err := cmdVersion()
+	version, err := versionFromBuildInfo()
 	if err != nil {
 		return nil, err
 	}
@@ -626,6 +615,7 @@ func buildCobraCmdline() (*cobra.Command, error) {
 	rootCmd.SetVersionTemplate(version)
 
 	rootCmd.PersistentFlags().StringVar(&rootLogLevel, "log-level", "", "logging level (debug, info, error); default error")
+	rootCmd.PersistentFlags().BoolP("verbose", "v", false, `Switch to verbose mode`)
 
 	buildCmd := &cobra.Command{
 		Use:   "build IMAGE_NAME",
@@ -639,7 +629,7 @@ func buildCobraCmdline() (*cobra.Command, error) {
 		SilenceUsage:          true,
 		Example: rootCmd.Use + " build quay.io/centos-bootc/centos-bootc:stream9\n" +
 			rootCmd.Use + " quay.io/centos-bootc/centos-bootc:stream9\n",
-		Version:               rootCmd.Version,
+		Version: rootCmd.Version,
 	}
 	buildCmd.SetVersionTemplate(version)
 

@@ -148,7 +148,7 @@ def test_bib_errors_only_once(tmp_path, container_storage, build_fake_container)
     assert res.stderr.count(needle) == 1
 
 
-@pytest.mark.parametrize("version_argument", ["version", "--version", "-v"])
+@pytest.mark.parametrize("version_argument", ["version", "--version"])
 def test_bib_version(tmp_path, container_storage, build_fake_container, version_argument):
     output_path = tmp_path / "output"
     output_path.mkdir(exist_ok=True)
@@ -169,8 +169,11 @@ def test_bib_version(tmp_path, container_storage, build_fake_container, version_
         capture_output=True, text=True, check=False)
     if git_res.returncode == 0:
         expected_rev = git_res.stdout.strip()
-    needle = f"revision: {expected_rev}"
-    assert needle in res.stdout
+    assert f"build_revision: {expected_rev}" in res.stdout
+    assert "build_time: " in res.stdout
+    assert "build_tainted: " in res.stdout
+    # we have a final newline
+    assert res.stdout[-1] == "\n"
 
 
 def test_bib_no_outside_container_warning_in_container(tmp_path, container_storage, build_fake_container):
