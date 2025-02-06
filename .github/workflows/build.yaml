@@ -66,5 +66,3 @@ jobs:
           registry: "ghcr.io"
           image: ${{ env.IMAGE_NAME }}
           tags: "latest"
-          extra-args: |
-            --disable-content-trust
